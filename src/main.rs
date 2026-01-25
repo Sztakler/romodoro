@@ -5,7 +5,7 @@ use std::{
 };
 
 use clap::Parser;
-use notify_rust::{Notification, Timeout};
+use notify_rust::{Notification, NotificationHandle};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A simple Pomodoro timer in Rust")]
@@ -23,11 +23,17 @@ struct Args {
     break_time: u32,
 }
 
-fn send_notification(summary: &str, body: &str, timeout: i32) {
+fn update_notification(handle: &mut NotificationHandle, summary: &str, body: &str) {
+    handle.summary(summary);
+    handle.body(body);
+    handle.update();
+}
+
+fn send_notification(summary: &str, body: &str) {
     Notification::new()
         .summary(summary)
         .body(body)
-        .timeout(timeout)
+        .timeout(5000)
         .show()
         .unwrap();
 }
@@ -35,21 +41,26 @@ fn send_notification(summary: &str, body: &str, timeout: i32) {
 fn run_timer(minutes: u32, message: &str) {
     let total_seconds = minutes * 60;
 
+    let mut notification = Notification::new()
+        .summary(message)
+        .body("Time to focus!")
+        .timeout(0)
+        .show()
+        .unwrap();
+
     for i in (1..=total_seconds).rev() {
         let minutes = i / 60;
         let seconds = i % 60;
+        let time_str = format!("{:02}:{:02} remaining.", minutes, seconds);
 
-        print!("\r{} {:02}:{:02} remaining.", message, minutes, seconds);
-        send_notification(
-            message,
-            &format!("{:02}:{:02} remaining.", minutes, seconds),
-            1000,
-        );
+        print!("\r{}: {}", message, time_str);
+        update_notification(&mut notification, message, &time_str);
+
         io::stdout().flush().unwrap();
         thread::sleep(Duration::from_secs(1));
     }
 
-    print!("\r{} 00:00 remaining.\n", message);
+    print!("\r{}: 00:00 remaining.\n", message);
 }
 
 fn main() {
@@ -60,15 +71,15 @@ fn main() {
     for i in 1..=args.count {
         println!("\n--- Session {}/{} ---", i, args.count);
 
-        send_notification("🦀 Pomodoro", "Time to focus!", 5000);
-        run_timer(args.work_time, "🚀 Work:");
+        send_notification("🦀 Pomodoro", "Time to focus!");
+        run_timer(args.work_time, "🚀 Work");
 
         if i < args.count {
-            send_notification("🦀 Pomodoro", "Take a break!", 5000);
-            run_timer(args.break_time, "☕ Break:");
+            send_notification("🦀 Pomodoro", "Take a break!");
+            run_timer(args.break_time, "☕ Break");
         }
     }
 
-    send_notification("🎉 Finished!", "You've completed all sessions!", 5000);
+    send_notification("🎉 Finished!", "You've completed all sessions!");
     println!("\n\r--- 🎉 Finished! Good job! 🎉 ---");
 }
