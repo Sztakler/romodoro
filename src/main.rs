@@ -19,5 +19,15 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    println!("Starting Pomodoro session: {} sessions.", args.count)
+    println!("Starting Pomodoro session: {} sessions.", args.count);
+
+    for i in 1..=args.count {
+        println!("\n--- Session {}/{} ---", i, args.count);
+
+        if i < args.count {
+            println!("Break! Take a {} minutes rest.", args.break_time);
+        } else {
+            println!("Finished! Good job!");
+        }
+    }
 }
