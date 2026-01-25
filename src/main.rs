@@ -5,6 +5,7 @@ use std::{
 };
 
 use clap::Parser;
+use notify_rust::Notification;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A simple Pomodoro timer in Rust")]
@@ -20,6 +21,15 @@ struct Args {
     // Break time (in minutes)
     #[arg(short, long, default_value_t = 1)]
     break_time: u32,
+}
+
+fn send_notification(summary: &str, body: &str) {
+    Notification::new()
+        .summary(summary)
+        .body(body)
+        .timeout(5000)
+        .show()
+        .unwrap();
 }
 
 fn run_timer(minutes: u32, message: &str) {
@@ -45,12 +55,15 @@ fn main() {
     for i in 1..=args.count {
         println!("\n--- Session {}/{} ---", i, args.count);
 
+        send_notification("🦀 Pomodoro", "Time to focus!");
         run_timer(args.work_time, "🚀 Work:");
 
         if i < args.count {
+            send_notification("🦀 Pomodoro", "Take a break!");
             run_timer(args.break_time, "☕ Break:");
         }
     }
 
+    send_notification("🎉 Finished!", "You've completed all sessions!");
     println!("\n\r--- 🎉 Finished! Good job! 🎉 ---");
 }
