@@ -12,7 +12,7 @@ struct Args {
     work_time: u32,
 
     // Break time (in minutes)
-    #[arg(short, long, default_value_t = 25)]
+    #[arg(short, long, default_value_t = 5)]
     break_time: u32,
 }
 
