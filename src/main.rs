@@ -4,11 +4,7 @@ use crossterm::event::{self, KeyCode, KeyEventKind};
 use notify_rust::{Notification, NotificationHandle};
 use std::{
     io::{self, Write},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
@@ -61,18 +57,18 @@ fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
     thread::spawn(move || {
         let _ = crossterm::terminal::enable_raw_mode();
         loop {
-            if let Ok(event::Event::Key(key)) = event::read() {
-                if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char('p') | KeyCode::Char(' ') => {
-                            let _ = tx_clone.send(Msg::TogglePause);
-                        }
-                        KeyCode::Char('q') => {
-                            let _ = tx_clone.send(Msg::Quit);
-                            break;
-                        }
-                        _ => {}
+            if let Ok(event::Event::Key(key)) = event::read()
+                && key.kind == KeyEventKind::Press
+            {
+                match key.code {
+                    KeyCode::Char('p') | KeyCode::Char(' ') => {
+                        let _ = tx_clone.send(Msg::TogglePause);
                     }
+                    KeyCode::Char('q') => {
+                        let _ = tx_clone.send(Msg::Quit);
+                        break;
+                    }
+                    _ => {}
                 }
             }
         }
