@@ -1,11 +1,11 @@
+use anyhow::Context;
+use clap::Parser;
+use notify_rust::{Notification, NotificationHandle};
 use std::{
     io::{self, Write},
     thread,
     time::Duration,
 };
-
-use clap::Parser;
-use notify_rust::{Notification, NotificationHandle};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A simple Pomodoro timer in Rust")]
@@ -29,16 +29,17 @@ fn update_notification(handle: &mut NotificationHandle, summary: &str, body: &st
     handle.update();
 }
 
-fn send_notification(summary: &str, body: &str) {
+fn send_notification(summary: &str, body: &str) -> anyhow::Result<()> {
     Notification::new()
         .summary(summary)
         .body(body)
         .timeout(5000)
         .show()
-        .unwrap();
+        .context("Couldn't send the notification")?;
+    Ok(())
 }
 
-fn run_timer(minutes: u32, message: &str) {
+fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
     let total_seconds = minutes * 60;
 
     let mut notification = Notification::new()
@@ -46,7 +47,7 @@ fn run_timer(minutes: u32, message: &str) {
         .body("Time to focus!")
         .timeout(0)
         .show()
-        .unwrap();
+        .context("Couldn't send the notification")?;
 
     for i in (1..=total_seconds).rev() {
         let minutes = i / 60;
@@ -56,14 +57,17 @@ fn run_timer(minutes: u32, message: &str) {
         print!("\r{}: {}", message, time_str);
         update_notification(&mut notification, message, &time_str);
 
-        io::stdout().flush().unwrap();
+        io::stdout()
+            .flush()
+            .context("Error while flushing stdout buffer")?;
         thread::sleep(Duration::from_millis(100));
     }
 
     print!("\r{}: 00:00 remaining.\n", message);
+    Ok(())
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     println!("Starting Pomodoro cycle: {} sessions.", args.count);
@@ -71,15 +75,16 @@ fn main() {
     for i in 1..=args.count {
         println!("\n--- Session {}/{} ---", i, args.count);
 
-        send_notification("🦀 Pomodoro", "Time to focus!");
-        run_timer(args.work_time, "🚀 Work");
+        send_notification("🦀 Pomodoro", "Time to focus!")?;
+        run_timer(args.work_time, "🚀 Work")?;
 
         if i < args.count {
-            send_notification("🦀 Pomodoro", "Take a break!");
-            run_timer(args.break_time, "☕ Break");
+            send_notification("🦀 Pomodoro", "Take a break!")?;
+            run_timer(args.break_time, "☕ Break")?;
         }
     }
 
-    send_notification("😿 Finished!", "I'm tired boss. 😿");
+    send_notification("😿 Finished!", "I'm tired boss. 😿")?;
     println!("\n\r--- 😿 I'm tired boss. 😿 ---");
+    Ok(())
 }
