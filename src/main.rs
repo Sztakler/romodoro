@@ -72,14 +72,19 @@ fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::R
     while remaining > 0 {
         let mins = remaining / 60;
         let secs = remaining % 60;
+        let time_str = format!("{:02}:{:02} remaining.", mins, secs);
 
         if is_paused {
             print!(
-                "\r\x1b[2K{} - [PAUSED] (Press Space/P to resume, Q to quit)",
-                message
+                "\r\x1b[2K{}: {} [PAUSED] (Press Space/P to resume, Q to quit)",
+                message, &time_str
+            );
+            update_notification(
+                &mut notification,
+                &format!("{} {}", message, "[Paused]"),
+                &time_str,
             );
         } else {
-            let time_str = format!("{:02}:{:02} remaining.", mins, secs);
             print!(
                 "\r\x1b[2K{}: {} (Press Space/P to pause, Q to quit)",
                 message, time_str
