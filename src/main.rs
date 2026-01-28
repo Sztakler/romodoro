@@ -46,7 +46,7 @@ fn send_notification(summary: &str, body: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::Result<()> {
+fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::Result<bool> {
     let mut remaining = minutes * 60;
     let mut is_paused = false;
 
@@ -83,7 +83,8 @@ fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::R
             Ok(Msg::Quit) => {
                 let _ = crossterm::terminal::disable_raw_mode();
                 println!("\nQuitting...");
-                std::process::exit(0);
+                notification.close();
+                return Ok(false);
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 if !is_paused {
@@ -94,8 +95,9 @@ fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::R
         }
     }
 
+    notification.close();
     println!("\r\x1b[2K{}: 00:00 - Done!          ", message);
-    Ok(())
+    Ok(true)
 }
 
 fn spawn_keyboard_handler(tx: mpsc::Sender<Msg>) {
@@ -141,11 +143,15 @@ fn main() -> anyhow::Result<()> {
         println!("\n\r--- Session {}/{} ---", i, args.count);
 
         send_notification("🚀 Work", "Focus time!")?;
-        run_timer(args.work_time, "🚀 Work", &rx)?;
+        if !run_timer(args.work_time, "🚀 Work", &rx)? {
+            break;
+        }
 
         if i < args.count {
             send_notification("☕ Break", "Take a break!")?;
-            run_timer(args.break_time, "☕ Break", &rx)?;
+            if !run_timer(args.break_time, "☕ Break", &rx)? {
+                break;
+            }
         }
     }
 
