@@ -76,7 +76,7 @@ fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::R
 
         io::stdout().flush()?;
 
-        match rx.recv_timeout(Duration::from_millis(50)) {
+        match rx.recv_timeout(Duration::from_secs(1)) {
             Ok(Msg::TogglePause) => {
                 is_paused = !is_paused;
             }
