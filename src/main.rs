@@ -14,6 +14,19 @@ enum Msg {
     Quit,
 }
 
+struct RawModeGuard;
+impl RawModeGuard {
+    fn new() -> Self {
+        let _ = crossterm::terminal::enable_raw_mode();
+        Self
+    }
+}
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A simple Pomodoro timer in Rust")]
 struct Args {
@@ -136,7 +149,7 @@ fn main() -> anyhow::Result<()> {
     println!("Start time: {}", start_display);
 
     let (tx, rx) = mpsc::channel();
-
+    let _guard = RawModeGuard::new();
     spawn_keyboard_handler(tx);
 
     for i in 1..=args.count {
