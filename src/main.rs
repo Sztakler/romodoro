@@ -1,6 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
-use crossterm::event::{self, KeyCode, KeyEventKind};
+use crossterm::event::{self, KeyCode, KeyEventKind, KeyModifiers};
 use notify_rust::{Notification, NotificationHandle};
 use std::{
     io::{self, Write},
@@ -98,6 +98,33 @@ fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::R
     Ok(())
 }
 
+fn spawn_keyboard_handler(tx: mpsc::Sender<Msg>) {
+    thread::spawn(move || {
+        let _ = crossterm::terminal::enable_raw_mode();
+        loop {
+            if let Ok(event::Event::Key(key)) = event::read()
+                && key.kind == KeyEventKind::Press
+            {
+                match key.code {
+                    KeyCode::Char('p') | KeyCode::Char(' ') => {
+                        let _ = tx.send(Msg::TogglePause);
+                    }
+                    KeyCode::Char('q') => {
+                        let _ = tx.send(Msg::Quit);
+                        break;
+                    }
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        let _ = tx.send(Msg::Quit);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let _ = crossterm::terminal::disable_raw_mode();
+    });
+}
+
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let start_time = Instant::now();
@@ -107,28 +134,8 @@ fn main() -> anyhow::Result<()> {
     println!("Start time: {}", start_display);
 
     let (tx, rx) = mpsc::channel();
-    let tx_clone = tx.clone();
 
-    thread::spawn(move || {
-        let _ = crossterm::terminal::enable_raw_mode();
-        loop {
-            if let Ok(event::Event::Key(key)) = event::read()
-                && key.kind == KeyEventKind::Press
-            {
-                match key.code {
-                    KeyCode::Char('p') | KeyCode::Char(' ') => {
-                        let _ = tx_clone.send(Msg::TogglePause);
-                    }
-                    KeyCode::Char('q') => {
-                        let _ = tx_clone.send(Msg::Quit);
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-        }
-        let _ = crossterm::terminal::disable_raw_mode();
-    });
+    spawn_keyboard_handler(tx);
 
     for i in 1..=args.count {
         println!("\n\r--- Session {}/{} ---", i, args.count);
