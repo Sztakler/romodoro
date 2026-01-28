@@ -10,6 +10,8 @@ Keyboard input is being handled by a separate thread using signals and `mpsc` to
 
 And it has some cute emojis 🦀 😿 🚀 ☕.
 
+<img width="1920" height="1042" alt="image" src="https://github.com/user-attachments/assets/61f621c6-3e34-4511-a048-1a86ba6de725" />
+
 ## Controls
 
 * `Space` / `P`: Pause/Resume
