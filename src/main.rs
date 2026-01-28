@@ -7,10 +7,16 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
+        mpsc,
     },
     thread,
     time::{Duration, Instant},
 };
+
+enum Msg {
+    TogglePause,
+    Quit,
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A simple Pomodoro timer in Rust")]
@@ -46,12 +52,10 @@ fn send_notification(summary: &str, body: &str) -> anyhow::Result<()> {
 
 fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
     let total_seconds = minutes * 60;
+    let mut is_paused = false;
 
-    let is_paused = Arc::new(AtomicBool::new(false));
-    let should_exit = Arc::new(AtomicBool::new(false));
-
-    let pause_key = Arc::clone(&is_paused);
-    let quit_key = Arc::clone(&should_exit);
+    let (tx, rx) = mpsc::channel();
+    let tx_clone = tx.clone();
 
     // Keyboard thread
     thread::spawn(move || {
@@ -61,11 +65,10 @@ fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
                         KeyCode::Char('p') | KeyCode::Char(' ') => {
-                            let current = pause_key.load(Ordering::SeqCst);
-                            pause_key.store(!current, Ordering::SeqCst);
+                            let _ = tx_clone.send(Msg::TogglePause);
                         }
                         KeyCode::Char('q') => {
-                            quit_key.store(true, Ordering::SeqCst);
+                            let _ = tx_clone.send(Msg::Quit);
                             break;
                         }
                         _ => {}
@@ -84,29 +87,40 @@ fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
         .context("Couldn't send the notification")?;
 
     for i in (1..=total_seconds).rev() {
-        if should_exit.load(Ordering::SeqCst) {
-            println!("\nQuitting...");
-            std::process::exit(0);
-        }
+        if !is_paused {
+            let minutes = i / 60;
+            let seconds = i % 60;
+            let time_str = format!("{:02}:{:02} remaining.", minutes, seconds);
 
-        if is_paused.load(Ordering::SeqCst) {
+            print!("\r{}: {}", message, time_str);
+            update_notification(&mut notification, message, &time_str);
+
+            io::stdout()
+                .flush()
+                .context("Error while flushing stdout buffer")?;
+        } else {
             print!("\r\x1b[2K{} - [PAUSED] Press Space to resume", message);
-            io::stdout().flush()?;
-            thread::sleep(Duration::from_millis(200));
-            continue;
+            io::stdout()
+                .flush()
+                .context("Error while flushing stdout buffer")?;
         }
 
-        let minutes = i / 60;
-        let seconds = i % 60;
-        let time_str = format!("{:02}:{:02} remaining.", minutes, seconds);
-
-        print!("\r{}: {}", message, time_str);
-        update_notification(&mut notification, message, &time_str);
-
-        io::stdout()
-            .flush()
-            .context("Error while flushing stdout buffer")?;
-        thread::sleep(Duration::from_secs(1));
+        match rx.recv_timeout(Duration::from_secs(1)) {
+            Ok(Msg::TogglePause) => {
+                is_paused = !is_paused;
+            }
+            Ok(Msg::Quit) => {
+                let _ = crossterm::terminal::disable_raw_mode();
+                println!("\nQuitting...");
+                std::process::exit(0);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if !is_paused {
+                    continue;
+                }
+            }
+            Err(_) => break,
+        }
     }
 
     print!("\r{}: 00:00 remaining.\n", message);
