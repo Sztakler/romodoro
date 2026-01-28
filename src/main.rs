@@ -46,14 +46,69 @@ fn send_notification(summary: &str, body: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
-    let total_seconds = minutes * 60;
+fn run_timer(minutes: u32, message: &str, rx: &mpsc::Receiver<Msg>) -> anyhow::Result<()> {
+    let mut remaining = minutes * 60;
     let mut is_paused = false;
+
+    let mut notification = Notification::new()
+        .summary(message)
+        .body("Session started!")
+        .timeout(0)
+        .show()?;
+
+    while remaining > 0 {
+        let mins = remaining / 60;
+        let secs = remaining % 60;
+
+        if is_paused {
+            print!(
+                "\r\x1b[2K{} - [PAUSED] (Press Space/P to resume, Q to quit)",
+                message
+            );
+        } else {
+            let time_str = format!("{:02}:{:02} remaining.", mins, secs);
+            print!(
+                "\r\x1b[2K{}: {} (Press Space/P to pause, Q to quit)",
+                message, time_str
+            );
+            update_notification(&mut notification, message, &time_str);
+        }
+
+        io::stdout().flush()?;
+
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(Msg::TogglePause) => {
+                is_paused = !is_paused;
+            }
+            Ok(Msg::Quit) => {
+                let _ = crossterm::terminal::disable_raw_mode();
+                println!("\nQuitting...");
+                std::process::exit(0);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if !is_paused {
+                    remaining -= 1;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    println!("\r\x1b[2K{}: 00:00 - Done!          ", message);
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+    let start_time = Instant::now();
+    let start_display = chrono::Local::now().format("%H:%M:%S").to_string();
+
+    println!("🦀 Starting Pomodoro cycle: {} sessions.", args.count);
+    println!("Start time: {}", start_display);
 
     let (tx, rx) = mpsc::channel();
     let tx_clone = tx.clone();
 
-    // Keyboard thread
     thread::spawn(move || {
         let _ = crossterm::terminal::enable_raw_mode();
         loop {
@@ -75,71 +130,15 @@ fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
         let _ = crossterm::terminal::disable_raw_mode();
     });
 
-    let mut notification = Notification::new()
-        .summary(message)
-        .body("Time to focus!")
-        .timeout(0)
-        .show()
-        .context("Couldn't send the notification")?;
-
-    for i in (1..=total_seconds).rev() {
-        if !is_paused {
-            let minutes = i / 60;
-            let seconds = i % 60;
-            let time_str = format!("{:02}:{:02} remaining.", minutes, seconds);
-
-            print!("\r{}: {}", message, time_str);
-            update_notification(&mut notification, message, &time_str);
-
-            io::stdout()
-                .flush()
-                .context("Error while flushing stdout buffer")?;
-        } else {
-            print!("\r\x1b[2K{} - [PAUSED] Press Space to resume", message);
-            io::stdout()
-                .flush()
-                .context("Error while flushing stdout buffer")?;
-        }
-
-        match rx.recv_timeout(Duration::from_secs(1)) {
-            Ok(Msg::TogglePause) => {
-                is_paused = !is_paused;
-            }
-            Ok(Msg::Quit) => {
-                let _ = crossterm::terminal::disable_raw_mode();
-                println!("\nQuitting...");
-                std::process::exit(0);
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if !is_paused {
-                    continue;
-                }
-            }
-            Err(_) => break,
-        }
-    }
-
-    print!("\r{}: 00:00 remaining.\n", message);
-    Ok(())
-}
-
-fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
-
-    let start_time = Instant::now();
-    let start_display = chrono::Local::now().format("%H:%M:%S").to_string();
-
-    println!("Starting Pomodoro cycle: {} sessions.", args.count);
-
     for i in 1..=args.count {
-        println!("\n--- Session {}/{} ---", i, args.count);
+        println!("\n\r--- Session {}/{} ---", i, args.count);
 
-        send_notification("🦀 Pomodoro", "Time to focus!")?;
-        run_timer(args.work_time, "🚀 Work")?;
+        send_notification("🚀 Work", "Focus time!")?;
+        run_timer(args.work_time, "🚀 Work", &rx)?;
 
         if i < args.count {
-            send_notification("🦀 Pomodoro", "Take a break!")?;
-            run_timer(args.break_time, "☕ Break")?;
+            send_notification("☕ Break", "Take a break!")?;
+            run_timer(args.break_time, "☕ Break", &rx)?;
         }
     }
 
@@ -153,7 +152,7 @@ fn main() -> anyhow::Result<()> {
     send_notification("😿 Finished!", "I'm tired boss. 😿")?;
     println!("\n\r--- 😿 I'm tired boss. 😿 ---");
     println!(
-        "\n\rStarted at: {}\nFinished at: {}\nTotal time spent: {}h {}m {}s",
+        "\n\rStarted at: {}\n\rFinished at: {}\n\rTotal time spent: {}h {}m {}s",
         start_display, end_display, hours, mins, secs
     );
     Ok(())
