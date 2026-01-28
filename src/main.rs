@@ -57,7 +57,7 @@ fn run_timer(minutes: u32, message: &str) {
         update_notification(&mut notification, message, &time_str);
 
         io::stdout().flush().unwrap();
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_millis(100));
     }
 
     print!("\r{}: 00:00 remaining.\n", message);
@@ -80,6 +80,6 @@ fn main() {
         }
     }
 
-    send_notification("🎉 Finished!", "You've completed all sessions!");
-    println!("\n\r--- 🎉 Finished! Good job! 🎉 ---");
+    send_notification("😿 Finished!", "I'm tired boss. 😿");
+    println!("\n\r--- 😿 I'm tired boss. 😿 ---");
 }
