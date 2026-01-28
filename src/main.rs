@@ -1,10 +1,11 @@
 use anyhow::Context;
+use chrono::Local;
 use clap::Parser;
 use notify_rust::{Notification, NotificationHandle};
 use std::{
     io::{self, Write},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Parser, Debug)]
@@ -70,6 +71,9 @@ fn run_timer(minutes: u32, message: &str) -> anyhow::Result<()> {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
+    let start_time = Instant::now();
+    let start_display = chrono::Local::now().format("%H:%M:%S").to_string();
+
     println!("Starting Pomodoro cycle: {} sessions.", args.count);
 
     for i in 1..=args.count {
@@ -84,7 +88,18 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    let end_display = chrono::Local::now().format("%H:%M:%S").to_string();
+    let duration = start_time.elapsed();
+
+    let hours = duration.as_secs() / 3600;
+    let mins = (duration.as_secs() % 3600) / 60;
+    let secs = duration.as_secs() % 60;
+
     send_notification("😿 Finished!", "I'm tired boss. 😿")?;
     println!("\n\r--- 😿 I'm tired boss. 😿 ---");
+    println!(
+        "\n\rStarted at: {}\nFinished at: {}\nTotal time spent: {}h {}m {}s",
+        start_display, end_display, hours, mins, secs
+    );
     Ok(())
 }
