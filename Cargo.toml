@@ -2,6 +2,9 @@
 name = "romodoro"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+authors = ["metarth"]
+description = "A silly little pomodoro tool for studying"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
